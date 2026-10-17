@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-panchang: var(--font-panchang-base), "Syne", "Syncopate", "Arial Black",
+    sans-serif;
+}
+
+body {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-dossier,
+  .print-dossier * {
+    visibility: visible;
+  }
+  .print-dossier {
+    position: absolute;
+    inset: 0;
+    border: none !important;
+  }
+}

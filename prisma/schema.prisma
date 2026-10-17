@@ -1,0 +1,169 @@
+// Modfem Autos canonical data model — PostgreSQL/Supabase-ready.
+//
+// This schema mirrors the domain types in lib/types.ts exactly, so the app
+// can move from the zero-config JSON file store (app/api/store/route.ts) to
+// a real Postgres database by: generating the Prisma Client, running
+// `prisma migrate dev`, and swapping the file-backed store for a
+// Prisma-backed one — no changes to the shared mutation logic in
+// lib/store-shared.ts are required, since that logic already speaks in
+// terms of these same five entities.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RESERVED
+  IN_TRANSIT
+  CLEARING
+  DELIVERED
+}
+
+enum ShippingMethod {
+  RoRo
+  Container
+}
+
+enum MilestoneCode {
+  PURCHASED_CANADA
+  EXPORT_INSPECTION
+  AT_PORT_HALIFAX
+  ON_VESSEL_ATLANTIC
+  ARRIVED_LAGOS_PORT
+  CUSTOMS_CLEARANCE
+  READY_FOR_DELIVERY
+}
+
+enum DestinationPort {
+  TinCanIsland @map("Tin Can Island")
+  Apapa
+}
+
+enum SourcingRequestStatus {
+  NEW
+  SOURCING_AT_AUCTION
+  MATCH_FOUND
+  CONVERTED
+}
+
+model User {
+  id       String   @id @default(cuid())
+  name     String
+  email    String   @unique
+  role     Role     @default(CUSTOMER)
+  vehicles Vehicle[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id        String        @id @default(cuid())
+  vin       String        @unique
+  name      String
+  year      Int
+  make      String
+  model     String
+  basePriceCAD Float      @map("base_price_cad")
+  location  String
+  status    VehicleStatus @default(AVAILABLE)
+
+  // Specs (flattened — this is a value object, not a separate entity)
+  engine        String
+  mileageKm     Int    @map("mileage_km")
+  drivetrain    String
+  exteriorColor String @map("exterior_color")
+
+  frontImageUrl String @map("front_image_url")
+  rearImageUrl  String @map("rear_image_url")
+  thumbnailUrl  String @map("thumbnail_url")
+
+  owner   User?  @relation(fields: [ownerId], references: [id])
+  ownerId String? @map("owner_id")
+
+  shipment     Shipment?
+  trackingLogs TrackingLog[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+}
+
+model Shipment {
+  id             String         @id @default(cuid())
+  vehicle        Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId      String         @unique @map("vehicle_id")
+  shippingMethod ShippingMethod @map("shipping_method")
+  vesselName     String         @map("vessel_name")
+  bookingNumber  String         @unique @map("booking_number")
+  departurePort  String         @map("departure_port")
+  arrivalPort    String         @map("arrival_port")
+  departureDate  String         @map("departure_date")
+  etaLagos       String         @map("eta_lagos")
+
+  customsDutyNGN       Float @map("customs_duty_ngn")
+  clearingFeeNGN       Float @map("clearing_fee_ngn")
+  billOfLadingVerified Boolean @default(false) @map("bill_of_lading_verified")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipments")
+}
+
+model TrackingLog {
+  id          String        @id @default(cuid())
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String        @map("vehicle_id")
+  milestone   MilestoneCode
+  title       String
+  location    String
+  description String
+  timestamp   DateTime
+  completed   Boolean       @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([vehicleId])
+  @@map("tracking_logs")
+}
+
+model SourcingRequest {
+  id        String                 @id // e.g. "SR-2026-7K2Q"
+  createdAt DateTime               @default(now()) @map("created_at")
+  status    SourcingRequestStatus  @default(NEW)
+
+  // Buyer (value object — a sourcing request precedes any User account)
+  buyerName  String @map("buyer_name")
+  buyerEmail String @map("buyer_email")
+  buyerPhone String @map("buyer_phone")
+
+  // Vehicle spec (value object)
+  specYear          Int    @map("spec_year")
+  specMake          String @map("spec_make")
+  specModel         String @map("spec_model")
+  specTrimOrColor   String @map("spec_trim_or_color")
+  specMaxMileageKm  Int    @map("spec_max_mileage_km")
+
+  // Financials (value object)
+  totalBudgetNGN    Float           @map("total_budget_ngn")
+  maxBidCAD         Float           @map("max_bid_cad")
+  shippingMethod    ShippingMethod  @map("shipping_method")
+  destinationPort   DestinationPort @map("destination_port")
+  exchangeRateUsed  Float           @map("exchange_rate_used")
+
+  dealerNotes String? @map("dealer_notes")
+
+  @@map("sourcing_requests")
+}
